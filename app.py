@@ -289,7 +289,7 @@ if st.session_state[PAGE_SELECTION_KEY] == "Chat":
 
     # Mostrar modelo e opções de chat
     models = {
-        "claude-v3-haiku": "anthropic.claude-3-haiku-20240307-v1:0",
+
         "claude-3-5-sonnet-v2": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     }
 
