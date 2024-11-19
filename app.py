@@ -270,9 +270,7 @@ if st.session_state[PAGE_SELECTION_KEY] == "Chat":
     # Seleção de documento
     selected_document_name = None
     if selected_company_id:
-        # Recupera os arquivos da empresa
         try:
-            # Reutiliza a lista de empresas carregada anteriormente
             selected_company = next((company for company in companies if company["id"] == selected_company_id), None)
             if selected_company and "archives" in selected_company:
                 documents = selected_company["archives"]
@@ -288,7 +286,6 @@ if st.session_state[PAGE_SELECTION_KEY] == "Chat":
     selected_document_name = st.selectbox("Documento", document_options)
     if selected_document_name == "Todos os Documentos":
         selected_document_name = None  # Define como None para busca global
-
 
     # Mostrar modelo e opções de chat
     models = {
@@ -312,48 +309,50 @@ if st.session_state[PAGE_SELECTION_KEY] == "Chat":
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
 
-if prompt := st.chat_input():
-    # Adicionar a mensagem do usuário ao estado
-    user_message = {"role": "user", "content": prompt}
-    st.session_state.messages.append(user_message)
-    
-    # Renderizar a mensagem do usuário imediatamente
-    st.chat_message("user").write(prompt)
-    
-    # Construção do payload condicional
-    request_data = {
-        "question": prompt,
-        "companyId": chosen_company_id,
-        "modelId": chosen_model_id,
-    }
-    if selected_document_name:
-        request_data["documentName"] = selected_document_name
+    # Barra de entrada de texto aparece apenas na aba "Chat"
+    if prompt := st.chat_input():
+        # Adicionar a mensagem do usuário ao estado
+        user_message = {"role": "user", "content": prompt}
+        st.session_state.messages.append(user_message)
 
-    # Enviar requisição para a API
-    try:
-        response = requests.post(ENDPOINT_URL + "/chat", json=request_data)
-        if response.status_code == 200:
-            response_data = response.json()
-            response_text = response_data["response"]
+        # Renderizar a mensagem do usuário imediatamente
+        st.chat_message("user").write(prompt)
 
-            # Adicionar a resposta ao estado
-            assistant_message = {"role": "assistant", "content": response_text}
-            st.session_state.messages.append(assistant_message)
-            
-            # Renderizar a resposta do assistente imediatamente
-            st.chat_message("assistant").write(response_text)
-            
-            if show_citations and "citation" in response_data:
-                for citation_block in response_data["citation"]:
-                    citation_text = citation_block["content"]["text"]
-                    document_uri = citation_block["location"]["s3Location"]["uri"]
-                    document_name = citation_block["metadata"]["name"]
+        # Construção do payload condicional
+        request_data = {
+            "question": prompt,
+            "companyId": chosen_company_id,
+            "modelId": chosen_model_id,
+        }
+        if selected_document_name:
+            request_data["documentName"] = selected_document_name
 
-                    st.markdown(f"**Citação do documento:** {document_name}")
-                    st.markdown(f"**URI do Documento:** {document_uri}")
-                    st.markdown(f"**Conteúdo:**\n{citation_text}")
-                    st.markdown("---")
-        else:
-            st.error("Falhou em obter uma resposta da API.")
-    except Exception as e:
-        st.error(f"Ocorreu um erro ao tentar enviar o pedido.")
+        # Enviar requisição para a API
+        try:
+            response = requests.post(ENDPOINT_URL + "/chat", json=request_data)
+            if response.status_code == 200:
+                response_data = response.json()
+                response_text = response_data["response"]
+
+                # Adicionar a resposta ao estado
+                assistant_message = {"role": "assistant", "content": response_text}
+                st.session_state.messages.append(assistant_message)
+
+                # Renderizar a resposta do assistente imediatamente
+                st.chat_message("assistant").write(response_text)
+
+                if show_citations and "citation" in response_data:
+                    for citation_block in response_data["citation"]:
+                        citation_text = citation_block["content"]["text"]
+                        document_uri = citation_block["location"]["s3Location"]["uri"]
+                        document_name = citation_block["metadata"]["name"]
+
+                        st.markdown(f"**Citação do documento:** {document_name}")
+                        st.markdown(f"**URI do Documento:** {document_uri}")
+                        st.markdown(f"**Conteúdo:**\n{citation_text}")
+                        st.markdown("---")
+            else:
+                st.error("Falhou em obter uma resposta da API.")
+        except Exception as e:
+            st.error(f"Ocorreu um erro ao tentar enviar o pedido.")
+
