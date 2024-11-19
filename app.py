@@ -289,6 +289,7 @@ if st.session_state[PAGE_SELECTION_KEY] == "Chat":
 
     # Mostrar modelo e opções de chat
     models = {
+        "claude-v3-haiku": "anthropic.claude-3-haiku-20240307-v1:0",
         "claude-3-5-sonnet-v2": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     }
 
@@ -324,7 +325,7 @@ if st.session_state[PAGE_SELECTION_KEY] == "Chat":
             "modelId": chosen_model_id,
         }
         if selected_document_name:
-            request_data["documentName"] = selected_document_name
+            request_data["document_id"] = selected_document_name
 
         # Enviar requisição para a API
         try:
