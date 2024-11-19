@@ -342,7 +342,7 @@ if prompt := st.chat_input():
             
             # Renderizar a resposta do assistente imediatamente
             st.chat_message("assistant").write(response_text)
-
+            
             if show_citations and "citation" in response_data:
                 for citation_block in response_data["citation"]:
                     citation_text = citation_block["content"]["text"]
