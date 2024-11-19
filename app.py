@@ -133,12 +133,18 @@ elif st.session_state[PAGE_SELECTION_KEY] == "Atualize Empresa":
 
             if update_company_button and document_file:
                 base64_content = base64.b64encode(document_file.getvalue()).decode()
-                
+                if document_file:
+                    document_name = document_file.name.rsplit('.', 1)[0] or "documento_sem_nome"
+                else:
+                    document_name = None
+
+                print("JORGEEEE0", document_name)
                 api_data = {
                     "id": selected_company_id,
                     "documentType": document_type,
                     "documentContent": base64_content,
-                    "documentName": document_file.name.split('.')[0]
+                    "documentName": document_file.name.split('.')[0],
+                    "documentId": document_name
                 }
 
                 try:
@@ -238,14 +244,14 @@ if st.session_state[PAGE_SELECTION_KEY] == "Empresas":
                             st.error("Falha ao excluir os arquivos. Por favor, tente novamente.")
                     except Exception as e:
                         st.error(f"Um erro ocorreu: {str(e)}")
-elif st.session_state[PAGE_SELECTION_KEY] == "Chat":
+if st.session_state[PAGE_SELECTION_KEY] == "Chat":
     st.title("💬 Chatbot")
 
+    # Obter empresas
     try:
         response = requests.get(ENDPOINT_URL + "/company")
         if response.status_code == 200:
             companies = response.json()
-            print('companies', companies)
             company_id_options = [company["name"] for company in companies]
         else:
             st.error("Falha ao obter a lista de empresas. Por favor, tente novamente.")
@@ -254,32 +260,50 @@ elif st.session_state[PAGE_SELECTION_KEY] == "Chat":
         st.error(f"Um erro ocorreu: {str(e)}")
         st.stop()
 
+    # Seleção de empresa
     selected_company_name = st.selectbox("Empresa", company_id_options)
-
     selected_company_id = next(
         (company['id'] for company in companies if company["name"] == selected_company_name),
         None,
     )
 
-    print('selected_company_id', selected_company_id)
+    # Seleção de documento
+    selected_document_name = None
+    if selected_company_id:
+        # Recupera os arquivos da empresa
+        try:
+            # Reutiliza a lista de empresas carregada anteriormente
+            selected_company = next((company for company in companies if company["id"] == selected_company_id), None)
+            if selected_company and "archives" in selected_company:
+                documents = selected_company["archives"]
+                document_options = ["Todos os Documentos"] + [doc["archive_name"] for doc in documents]
+            else:
+                st.error("Nenhum documento encontrado para esta empresa.")
+                st.stop()
+        except Exception as e:
+            st.error(f"Erro ao carregar os arquivos: {str(e)}")
+            st.stop()
 
+    # Dropdown para selecionar documento ou "Todos os Documentos"
+    selected_document_name = st.selectbox("Documento", document_options)
+    if selected_document_name == "Todos os Documentos":
+        selected_document_name = None  # Define como None para busca global
+
+
+    # Mostrar modelo e opções de chat
     models = {
-        # "claude-v3-sonnet": "anthropic.claude-3-sonnet-20240229-v1:0",
-        # "claude-v3-haiku": "anthropic.claude-3-haiku-20240307-v1:0",
-        "claude-3-5-sonnet-v2": "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
-        # "claude-v2.1": "anthropic.claude-v2:1",
-        # "claude-v2": "anthropic.claude-v2",
-        # "claude-instant": "anthropic.claude-instant-v1",
+        "claude-v3-haiku": "anthropic.claude-3-haiku-20240307-v1:0",
+        "claude-3-5-sonnet-v2": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     }
 
     model_id_options = list(models.keys())
-
     selected_model_id = st.selectbox("Modelo", model_id_options)
     show_citations = st.checkbox("Mostrar citações")
 
     chosen_company_id = selected_company_id
     chosen_model_id = models[selected_model_id]
 
+    # Mensagens do chat
     if "messages" not in st.session_state:
         st.session_state["messages"] = [
             {"role": "assistant", "content": "Como posso ajudar você?"}
@@ -288,43 +312,48 @@ elif st.session_state[PAGE_SELECTION_KEY] == "Chat":
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
 
-    if prompt := st.chat_input():
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        st.chat_message("user").write(prompt)
+if prompt := st.chat_input():
+    # Adicionar a mensagem do usuário ao estado
+    user_message = {"role": "user", "content": prompt}
+    st.session_state.messages.append(user_message)
+    
+    # Renderizar a mensagem do usuário imediatamente
+    st.chat_message("user").write(prompt)
+    
+    # Construção do payload condicional
+    request_data = {
+        "question": prompt,
+        "companyId": chosen_company_id,
+        "modelId": chosen_model_id,
+    }
+    if selected_document_name:
+        request_data["documentName"] = selected_document_name
 
-        request_data = {
-            "question": prompt,
-            "companyId": chosen_company_id,
-            "modelId": chosen_model_id,
-        }
+    # Enviar requisição para a API
+    try:
+        response = requests.post(ENDPOINT_URL + "/chat", json=request_data)
+        if response.status_code == 200:
+            response_data = response.json()
+            response_text = response_data["response"]
 
-        print('request_data', request_data)
+            # Adicionar a resposta ao estado
+            assistant_message = {"role": "assistant", "content": response_text}
+            st.session_state.messages.append(assistant_message)
+            
+            # Renderizar a resposta do assistente imediatamente
+            st.chat_message("assistant").write(response_text)
 
-        try:
-            response = requests.post(ENDPOINT_URL + "/chat", json=request_data)
-            if response.status_code == 200:
-                response_data = response.json()
-                response_text = response_data["response"]
+            if show_citations and "citation" in response_data:
+                for citation_block in response_data["citation"]:
+                    citation_text = citation_block["content"]["text"]
+                    document_uri = citation_block["location"]["s3Location"]["uri"]
+                    document_name = citation_block["metadata"]["name"]
 
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": response_text}
-                )
-                st.chat_message("assistant").write(response_text)
-
-                print(f"Response data: {response_data}")
-
-                if show_citations:
-                    if "citation" in response_data:
-                        for citation_block in response_data["citation"]:
-                            citation_text = citation_block["content"]["text"]
-                            document_uri = citation_block["location"]["s3Location"]["uri"]
-                            document_name = citation_block["metadata"]["name"]
-
-                            st.markdown(f"**Citation from document:** {document_name}")
-                            st.markdown(f"**Document URI:** {document_uri}")
-                            st.markdown(f"**Content:**\n{citation_text}")
-                            st.markdown("---")
-            else:
-                st.error("Falhou em obter uma resposta da api.")
-        except Exception as e:
-            st.error(f"Ocorreu um erro ao tentar enviar o pedido.")
+                    st.markdown(f"**Citação do documento:** {document_name}")
+                    st.markdown(f"**URI do Documento:** {document_uri}")
+                    st.markdown(f"**Conteúdo:**\n{citation_text}")
+                    st.markdown("---")
+        else:
+            st.error("Falhou em obter uma resposta da API.")
+    except Exception as e:
+        st.error(f"Ocorreu um erro ao tentar enviar o pedido.")
