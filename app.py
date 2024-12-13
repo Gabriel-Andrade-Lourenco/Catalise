@@ -3,7 +3,7 @@ import requests
 import base64
 
 PAGE_SELECTION_KEY = "page_selection"
-ENDPOINT_URL = "https://1za3l4arr4.execute-api.us-east-1.amazonaws.com/"
+ENDPOINT_URL = "https://451xlpq0fd.execute-api.us-east-1.amazonaws.com/"
 
 selected_archives = []
 
